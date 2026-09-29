@@ -1,0 +1,42 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DealMind</title><style>
+:root{--bg:#f2f4f1;--ink:#14211c;--mut:#5b6b63;--line:#d5dcd6;--acc:#3b3fd8;--warn:#c2410c;--card:#fff}
+*{box-sizing:border-box}body{margin:0;font:15px/1.55 ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:18px 28px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font:600 22px Georgia,serif;margin:0}.sub{color:var(--mut)}
+main{display:grid;grid-template-columns:320px 1fr;gap:20px;padding:20px 28px;max-width:1150px;margin:auto}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
+.call{padding:10px 0;border-bottom:1px solid var(--line)}.call:last-child{border:0}
+.call b{display:block}button{font:inherit;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink)}button:disabled{opacity:.4;cursor:default}button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.done{color:var(--acc)}.tabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}.tabs button.on{background:var(--acc);border-color:var(--acc)}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:800px){.cmp{grid-template-columns:1fr}}
+.out{white-space:pre-wrap;min-height:120px}.tag{font-size:12px;color:var(--mut);margin-bottom:6px}.bad .tag{color:var(--warn)}.good .tag{color:var(--acc)}
+.banner{background:#fff4ec;border:1px solid #f3c9ad;color:var(--warn);padding:8px 12px;border-radius:6px;margin-bottom:12px;display:none}
+</style></head><body>
+<header><h1>DealMind</h1><span class="sub" id="meta">Deal memory for sales teams, powered by Hindsight</span></header>
+<main><section class="card"><b>Calls with the prospect</b><div id="calls"></div><p><button class="ghost" onclick="reset()">Start a fresh deal</button></p></section>
+<section><div class="banner" id="deg">Hindsight is unreachable - running on local fallback memory.</div>
+<div class="tabs"><button class="on" data-t="brief">Pre-call brief</button><button data-t="coach">Coach</button><button data-t="followup">Follow-up email</button></div>
+<div id="pane"></div></section></main>
+<script>
+const $=s=>document.querySelector(s);let played=[],tab='brief';
+const api=(u,o)=>fetch(u,o).then(r=>r.json());
+async function load(){const d=await api('/api/deal');played=d.state.played;$('#meta').textContent=d.company+' - '+d.product;
+ $('#deg').style.display=d.state.degraded?'block':'none';
+ $('#calls').innerHTML=d.calls.map(c=>`<div class="call"><b>Call ${c.n}: ${c.title}</b><span class="sub">${c.date}</span><br>
+ ${c.n<5?`<button ${played.includes(c.n)?'disabled':''} onclick="play(${c.n},this)">${played.includes(c.n)?'<span>Remembered</span>':'Play and remember'}</button>`:'<span class="sub">The call you are about to join</span>'}</div>`).join('');render()}
+async function play(n,b){b.textContent='Retaining...';const r=await api('/api/play/'+n,{method:'POST'});await load()}
+async function reset(){await api('/api/reset',{method:'POST'});await load()}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');tab=b.dataset.t;render()});
+function render(){const p=$('#pane');
+ if(tab==='brief')p.innerHTML=`<p><button onclick="runBrief()">Generate brief for call 5</button> <span class="sub">Compares an agent with no memory against one with memory.</span></p><div class="cmp"><div class="card bad"><div class="tag">Without memory</div><div class="out" id="b0">-</div></div><div class="card good"><div class="tag">With Hindsight memory (${played.length} calls retained)</div><div class="out" id="b1">-</div></div></div>`;
+ if(tab==='coach')p.innerHTML=`<p><input id="obj" style="width:100%;padding:8px" value="CFO wants payback proof and dislikes big upfront commitments"></p><p><button onclick="runCoach()">Get coaching</button></p><div class="card"><div class="out" id="co">-</div></div><p class="sub">After the deal, teach the agent what happened:</p><button class="ghost" onclick="fb(true)">Tactic worked</button> <button class="ghost" onclick="fb(false)">Tactic failed</button>`;
+ if(tab==='followup')p.innerHTML=`<p><button onclick="runFu()">Draft follow-up</button></p><div class="card"><div class="out" id="fu">-</div></div>`}
+async function runBrief(){$('#b0').textContent='Thinking...';$('#b1').textContent='Recalling...';
+ api('/api/brief?memory=0').then(r=>$('#b0').textContent=r.text);api('/api/brief?memory=1').then(r=>{$('#b1').textContent=r.text;if(r.fallback)$('#deg').style.display='block'})}
+async function runCoach(){$('#co').textContent='Recalling this deal and past deals...';const r=await api('/api/coach?objection='+encodeURIComponent($('#obj').value));$('#co').textContent=r.text}
+async function runFu(){$('#fu').textContent='Drafting...';$('#fu').textContent=(await api('/api/followup')).text}
+async function fb(w){const t=$('#obj').value;await api('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tactic:'Response to: '+t,worked:w})});alert('Saved to the shared playbook memory.')}
+load()</script></body></html>
